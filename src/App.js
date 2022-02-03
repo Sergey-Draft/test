@@ -1,241 +1,101 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useState } from "react";
 import './App.scss';
-import moment from 'moment';
+import CallStats from "./components/CallStatistics";
+import AverageDuration from "./components/AverageDuration";
+import VideoChat from "./components/VideoChat";
+
 
 
 const App = () => {
 
-  const localVideoRef = useRef()
-  const remoteVideoRef = useRef()
-  const [callDisabled, setCallDisabled] = useState(true)
-  const [startDisabled, setStartDisabled] = useState(false)
+    const [call, manageCall] = useState({ isConnected: false, statistics: [], averageTime: 0 });
 
-  const [localStream, setLoaclStream] = useState(null)
-
-
-  const [callInfo, setCallInfo] = useState([])
-
-  let callInformation = []
-
-
-/*   useEffect(() => {
-    const constraints = {
-      audio: true,
-      video: true
-    }
-    navigator.mediaDevices.getUserMedia(constraints)
-      .then(stream => { localVideoRef.current.srcObject = stream; setLoaclStream(stream) })
-      .catch(e => { console.log('getUserMedia Error: ', e) })
-
-    setCallDisabled(false)
-    setStartDisabled(true)
-    console.log(localStream)
-  }, []) */
-
-
-
-
-  let pc1;
-  let pc2;
-  const offerOptions = {
-    offerToReceiveAudio: 1,
-    offerToReceiveVideo: 1
-  };
-
-
-  function getName(pc) {
-    return (pc === pc1) ? 'pc1' : 'pc2';
-  }
-
-  function getOtherPc(pc) {
-    return (pc === pc1) ? pc2 : pc1;
-  }
-
-
-  const getUserMedia = () => {
-    const constraints = {
-      audio: true,
-      video: true
-    }
-    navigator.mediaDevices.getUserMedia(constraints)
-      .then(stream => { localVideoRef.current.srcObject = stream; setLoaclStream(stream) })
-      .catch(e => { console.log('getUserMedia Error: ', e) })
-
-    setCallDisabled(false)
-    setStartDisabled(true)
-    console.log(localStream)
-
-  }
-
-
-
-  async function call() {
-    console.log('Starting call');
-    console.log(localStream);
-
-
-    const currentDate = new Date().toLocaleDateString()
-    const startTime = new Date().toLocaleTimeString()
-
-    const configuration = {};
-    console.log('RTCPeerConnection configuration:', configuration);
-    pc1 = new RTCPeerConnection(configuration);
-    console.log('Created local peer connection object pc1');
-    pc1.onicecandidate = (e) => onIceCandidate(pc1, e);
-    pc2 = new RTCPeerConnection(configuration);
-    console.log('Created remote peer connection object pc2');
-    pc2.onicecandidate = (e) => onIceCandidate(pc2, e);
-    pc2.addEventListener('track', gotRemoteStream);
-
-    localStream.getTracks().forEach(track => pc1.addTrack(track, localStream));
-    console.log('Added local stream to pc1');
-
-    try {
-      console.log('pc1 createOffer start');
-      const offer = await pc1.createOffer(offerOptions);
-      await onCreateOfferSuccess(offer);
-    } catch (e) {
-      onCreateSessionDescriptionError(e);
+    const average = (arr) => {
+        const result = arr.reduce((r, v) => r + v.durationSeconds, 0) / arr.length;
+        return Math.floor(result * 10) / 10;
     }
 
-/*     setCallInfo({
-      statistic: [{ date: currentDate, startTime: startTime }]
-    }) */
-
-    callInformation = [{currentDate, startTime}]
-    console.log(callInformation)
-
-
-  }
-
-
-  
-
-  function onCreateSessionDescriptionError(error) {
-    console.log(`Failed to create session description: ${error.toString()}`);
-  }
-
-  async function onCreateOfferSuccess(desc) {
-    console.log(`Offer from pc1\n${desc.sdp}`);
-    console.log('pc1 setLocalDescription start');
-    try {
-      await pc1.setLocalDescription(desc);
-      onSetLocalSuccess(pc1);
-    } catch (e) {
-      onSetSessionDescriptionError();
+    const durationAllCalls = (arr) => {
+        const result = arr.reduce((r, item) => {
+            return r + item.durationSeconds
+        }, 0)
+        return result;
     }
 
-    console.log('pc2 setRemoteDescription start');
-    try {
-      await pc2.setRemoteDescription(desc);
-      onSetRemoteSuccess(pc2);
-    } catch (e) {
-      onSetSessionDescriptionError();
+    const connected = (old) => {
+        const startTime = new Date();
+        const newCall = { key: old.statistics.length + 1, startTime, endTime: null, durationSeconds: 0 };
+        const arr = [...old.statistics, newCall]
+        const averageTime = average(arr);
+        const durationAll = durationAllCalls(arr)
+
+        return { isConnected: true, statistics: arr, averageTime, durationAll }
     }
 
-    console.log('pc2 createAnswer start');
-    try {
-      const answer = await pc2.createAnswer();
-      await onCreateAnswerSuccess(answer);
-    } catch (e) {
-      onCreateSessionDescriptionError(e);
+    const disconnected = (old) => {
+        const endTime = new Date();
+        const lastCall = old.statistics.pop();
+        lastCall.endTime = endTime;
+        const datediff = lastCall.endTime - lastCall.startTime;
+        lastCall.durationSeconds = Math.floor((datediff) / (1000));
+        const arr = [...old.statistics, lastCall];
+        const averageTime = average(arr);
+        const durationAll = durationAllCalls(arr)
+
+        return { isConnected: false, statistics: arr, averageTime, durationAll };
     }
-  }
 
-  function onSetLocalSuccess(pc) {
-    console.log(`${getName(pc)} setLocalDescription complete`);
-  }
-
-  function onSetRemoteSuccess(pc) {
-    console.log(`${getName(pc)} setRemoteDescription complete`);
-  }
-
-  function onSetSessionDescriptionError(error) {
-    console.log(`Failed to set session description: ${error.toString()}`);
-  }
-
-  function gotRemoteStream(e) {
-    console.log(remoteVideoRef)
-    if (remoteVideoRef.current.srcObject !== e.streams[0]) {
-      remoteVideoRef.current.srcObject = e.streams[0];
-      console.log('pc2 received remote stream');
+    const deleteUser = (key) => {
+        if (call.statistics) {
+            var index = call.statistics.findIndex(item => item.key == key)
+            if (index > -1) {
+                call.statistics.splice(index, 1);
+                const arr = [...call.statistics]
+                const averageTime = average(arr);
+                const durationAll = durationAllCalls(arr)
+                manageCall(old => {
+                    return {
+                        ...old,
+                        averageTime,
+                        durationAll
+                    }
+                })
+            }
+        }
     }
-  }
 
-  async function onCreateAnswerSuccess(desc) {
-    console.log(`Answer from pc2:\n${desc.sdp}`);
-    console.log('pc2 setLocalDescription start');
-    try {
-      await pc2.setLocalDescription(desc);
-      onSetLocalSuccess(pc2);
-    } catch (e) {
-      onSetSessionDescriptionError(e);
-    }
-    console.log('pc1 setRemoteDescription start');
-    try {
-      await pc1.setRemoteDescription(desc);
-      onSetRemoteSuccess(pc1);
-    } catch (e) {
-      onSetSessionDescriptionError(e);
-    }
-  }
-
-  async function onIceCandidate(pc, event) {
-    try {
-      await (getOtherPc(pc).addIceCandidate(event.candidate));
-      onAddIceCandidateSuccess(pc);
-    } catch (e) {
-      onAddIceCandidateError(pc, e);
-    }
-    console.log(`${getName(pc)} ICE candidate:\n${event.candidate ? event.candidate.candidate : '(null)'}`);
-  }
-
-  function onAddIceCandidateSuccess(pc) {
-    console.log(`${getName(pc)} addIceCandidate success`);
-  }
-
-  function onAddIceCandidateError(pc, error) {
-    console.log(`${getName(pc)} failed to add ICE Candidate: ${error.toString()}`);
-  }
-
-
-  function hangup() {
-    const callEnd = new Date().toLocaleTimeString();
-    callInformation[0].callEnd = callEnd;
-
-    const difference = moment.utc(moment.duration(callInformation[0].callEnd) - moment.duration(callInformation[0].startTime)).format('HH:mm:ss')
-    var diff = moment(callInformation[0].callEnd,"HH:mm:ss").diff(moment(callInformation[0].startTime,"HH:mm:ss"), 'second')
-    console.log(callInformation)
-    console.log(difference)
-
-    console.log('Ending call', pc1);
-    pc1.close();
-    pc2.close();
-    pc1 = null;
-    pc2 = null;
-
-    setCallInfo(old => 
-      [...old, callInformation]
-    )
-
-  }
-
-
-  return (
-    <div>
-      <div className="container" >
-        <video id="localVideo" autoPlay ref={localVideoRef} ></video>
-        <video id="remoteVideo" autoPlay ref={remoteVideoRef} ></video>
-        <p>statistic</p>
-        <div className="statistic">{JSON.stringify(callInfo)}</div>
-        <div className="box" >
-          <button className="btn btn-success" onClick={() =>getUserMedia()} disabled={startDisabled} >Захват аудио видео</button>
-          <button className="btn btn-success" onClick={() => call() } disabled={callDisabled} >Звонок</button>
-          <button className="btn btn-danger" onClick={() => hangup()} >Сброс</button>
+    return (
+        <div className="App">
+            <div className="container">
+                <div className="videoContainer">{call.isConnected
+                    ? <VideoChat />
+                    : <div className="infoText" >Press Join</div>}</div>
+                <div>Current status: {call.isConnected ? "Connected" : "Disconnected"}</div>
+                <div>
+                    <button className="btn btn-success" onClick={() => { manageCall((old) => connected(old)); }} disabled={call.isConnected}>Join</button>
+                    <button className="btn btn-danger" onClick={() => { manageCall((old) => disconnected(old)); }} disabled={!call.isConnected}>Leave</button>
+                    <br />
+                    {call.statistics.length > 0 &&
+                        (<div>
+                            <table className="table table-hover" >
+                                <tr>
+                                    <th>Date</th>
+                                    <th>Start at:</th>
+                                    <th>End at:</th>
+                                    <th>Duration</th>
+                                </tr>
+                                {call.statistics.map(s => <CallStats deleteUser={deleteUser} item={s} isConnected = {call.isConnected} />)}
+                            </table>
+                        </div>)
+                    }
+                    <br />
+                    {!call.isConnected && <AverageDuration averageTime={call.averageTime} durationAll={call.durationAll} />}
+                </div>
+                <div>
+                </div>
+            </div>
         </div>
-      </div>
-    </div>
-  );
-}
+    );
+};
 
 export default App;

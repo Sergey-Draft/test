@@ -69,7 +69,7 @@ const App = () => {
             <div className="container">
                 <div className="videoContainer">{call.isConnected
                     ? <VideoChat />
-                    : <div className="infoText" >Press Join</div>}</div>
+                    : <div className="infoText" >Press Join to connect<br/><a href="https://github.com/Sergey-Draft/test">Code on github</a></div>}</div>
                 <div>Current status: {call.isConnected ? "Connected" : "Disconnected"}</div>
                 <div>
                     <button className="btn btn-success" onClick={() => { manageCall((old) => connected(old)); }} disabled={call.isConnected}>Join</button>

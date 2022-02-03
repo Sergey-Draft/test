@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import './App.scss';
+import moment from 'moment';
 
 
 const App = () => {
@@ -12,21 +13,24 @@ const App = () => {
   const [localStream, setLoaclStream] = useState(null)
 
 
-  const [callInfo, setCallInfo] = useState({
-    statistic: [
-      {
-        /*         date: '',
-                startTime: '',
-                endTime: '',
-                duration: '' */
-      }
-    ]
-  })
+  const [callInfo, setCallInfo] = useState([])
+
+  let callInformation = []
 
 
 /*   useEffect(() => {
-    console.log(callInfo);
-  }, [callInfo]) */
+    const constraints = {
+      audio: true,
+      video: true
+    }
+    navigator.mediaDevices.getUserMedia(constraints)
+      .then(stream => { localVideoRef.current.srcObject = stream; setLoaclStream(stream) })
+      .catch(e => { console.log('getUserMedia Error: ', e) })
+
+    setCallDisabled(false)
+    setStartDisabled(true)
+    console.log(localStream)
+  }, []) */
 
 
 
@@ -48,7 +52,7 @@ const App = () => {
   }
 
 
-  const getUserMedia = async () => {
+  const getUserMedia = () => {
     const constraints = {
       audio: true,
       video: true
@@ -94,9 +98,14 @@ const App = () => {
       onCreateSessionDescriptionError(e);
     }
 
-    setCallInfo({
+/*     setCallInfo({
       statistic: [{ date: currentDate, startTime: startTime }]
-    })
+    }) */
+
+    callInformation = [{currentDate, startTime}]
+    console.log(callInformation)
+
+
   }
 
 
@@ -191,11 +200,23 @@ const App = () => {
 
 
   function hangup() {
+    const callEnd = new Date().toLocaleTimeString();
+    callInformation[0].callEnd = callEnd;
+
+    const difference = moment.utc(moment.duration(callInformation[0].callEnd) - moment.duration(callInformation[0].startTime)).format('HH:mm:ss')
+    var diff = moment(callInformation[0].callEnd,"HH:mm:ss").diff(moment(callInformation[0].startTime,"HH:mm:ss"), 'second')
+    console.log(callInformation)
+    console.log(difference)
+
     console.log('Ending call', pc1);
     pc1.close();
     pc2.close();
     pc1 = null;
     pc2 = null;
+
+    setCallInfo(old => 
+      [...old, callInformation]
+    )
 
   }
 
@@ -208,7 +229,7 @@ const App = () => {
         <p>statistic</p>
         <div className="statistic">{JSON.stringify(callInfo)}</div>
         <div className="box" >
-          <button className="btn btn-success" onClick={() => getUserMedia()} disabled={startDisabled} >Захват аудио видео</button>
+          <button className="btn btn-success" onClick={() =>getUserMedia()} disabled={startDisabled} >Захват аудио видео</button>
           <button className="btn btn-success" onClick={() => call() } disabled={callDisabled} >Звонок</button>
           <button className="btn btn-danger" onClick={() => hangup()} >Сброс</button>
         </div>
